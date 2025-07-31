@@ -1,0 +1,65 @@
+name: Publish to PyPI.org
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+jobs:
+  job1:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: |
+          python3 -m pip install --upgrade pytest
+          pytest -vvvvv
+  job2:
+    name: Run linter
+    needs: job1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: |
+          python3 -m pip install --upgrade pylint pytest
+          pylint --fail-under=9.5 .
+  job3:
+    name: Bump package version
+    needs: job2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: |
+          .github/scripts/version.py
+          git config user.name r3ap3rpy
+          git config user.email r3ap3rpy@gmail.com 
+          git add .
+          git commit -m "Version bumped!"
+          git push
+  job4:
+    name: Build and publish on PyPi
+    needs: job3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reset main to get latest commit
+        uses: actions/checkout@v3
+      - run: |
+          echo "Triggered by commit $(git log -1 --format='%H')"
+          git pull --no-commit
+          git reset --hard origin/main
+          echo "Jumped to commit $(git log -1 --format='%H')"
+          python3 -m pip install --upgrade build && python3 -m build
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+          verify-metadata: false
